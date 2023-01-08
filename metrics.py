@@ -17,7 +17,7 @@ def predict(config, bert_model, bart_model, dataset, device):
             compressed_buf = compress(bert_model.compresser, data_buf, config.times, device, config.batch_size_inference)
             temp_inputs = torch.zeros(2, 1024, dtype=torch.long, device=device)
             input = [t.unsqueeze(0) for t in compressed_buf.export(temp_inputs, device=device)]
-            output = bart_model.summarizer.generate(input_ids=input[0], attention_mask=input[1], num_beams=5, min_length=100, max_length=500, length_penalty=3, no_repeat_ngram_size=3)
+            output = bart_model.summarizer.generate(input_ids=input[0], attention_mask=input[1], num_beams=4, min_length=100, max_length=500, length_penalty=2)
             yield output[0], data_buf.summary['input_ids'][0]
 
 
@@ -46,7 +46,7 @@ def evaluate(config, mode):
     predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     references = tokenizer.batch_decode(references, skip_special_tokens=True)
 
-    bertscore_result = bertscore.compute(predictions=predictions, references=references, model_type="distilbert-base-uncased")
+    bertscore_result = bertscore.compute(predictions=predictions, references=references, lang="en")
     rouge_result = rouge.compute(predictions=predictions, references=references, use_stemmer=True)
     result = {key: value * 100 for key, value in rouge_result.items()}
     result['bert-score-precision'] = mean(bertscore_result['precision'])

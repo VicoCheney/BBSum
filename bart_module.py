@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from transformers import BartForConditionalGeneration
-from utils import WarmupLinearLR
 from buffer import buffer_collate
 
 
@@ -17,14 +16,7 @@ class BartModule(pl.LightningModule):
         self.save_hyperparameters()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.summarizer.parameters(),
-            lr=self.config.lr2,
-            weight_decay=self.config.weight_decay2
-            )
-        scheduler = WarmupLinearLR(optimizer, self.config.step_size)
-
-        return [optimizer], [scheduler]
+        return torch.optim.AdamW(self.summarizer.parameters(), lr=self.config.lr2)
 
     def on_train_epoch_start(self):
         self._file = open(os.path.join(self.config.tmp_dir, 'changes_temp.txt'), 'w')
@@ -90,7 +82,7 @@ class BartModule(pl.LightningModule):
             inputs[3, i] = buf.summary['attention_mask']
         result = self.summarizer(input_ids=inputs[0], attention_mask=inputs[1], labels=inputs[2], decoder_attention_mask=inputs[3])
         loss_bart = result.loss
-        self._intervention(bufs, inputs[2], inputs[3], loss_bart)
+        # self._intervention(bufs, inputs[2], inputs[3], loss_bart)
         loss_bart = loss_bart.mean()
         tensorboard_logs = {'loss': loss_bart}
         return {'loss': loss_bart, 'log': tensorboard_logs}

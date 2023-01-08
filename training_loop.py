@@ -14,7 +14,7 @@ def train(config):
     os.makedirs(config.tmp_dir, exist_ok=True)
 
     data_driver = DataDriver(config)
-    if not os.path.exists(os.path.join(config.tmp_dir, 'govreport_bi_encoder_initialization.txt')):
+    if not os.path.exists(os.path.join(config.tmp_dir, 'bi_encoder_initialization.txt')):
         data_driver.bi_encoder_initialize()
     data_driver.apply_initialization(config.tmp_dir)
 
@@ -35,11 +35,10 @@ def train(config):
     bart_checkpoint_callback = ModelCheckpoint(dirpath=bart_checkpoint_path, filename="{epoch}", save_top_k=-1)
 
     for epoch in range(min_epoch, config.num_epochs):
-        data_driver.apply_changes(config.tmp_dir)
+        # data_driver.apply_changes(config.tmp_dir)
         bert_dataset = data_driver.build_random_buffer(num_samples=config.num_samples)
         bert_model.dataset = bert_dataset
-        bert_trainer = Trainer(max_epochs=epoch + 1, precision=16, accelerator='gpu', devices=[0], logger=bert_logger,
-                               auto_lr_find=True, callbacks=[bert_checkpoint_callback])
+        bert_trainer = Trainer(max_epochs=epoch + 1, precision=16, accelerator='gpu', devices=[0], logger=bert_logger, callbacks=[bert_checkpoint_callback])
         if epoch == 0:
             bert_trainer.fit(bert_model)
         else:
@@ -48,13 +47,12 @@ def train(config):
         data_driver.collect_estimations(config.tmp_dir)
         bart_dataset = data_driver.build_promising_buffer()
         bart_model.dataset = bart_dataset
-        bart_trainer = Trainer(max_epochs=epoch + 1, precision=16, accelerator='gpu', devices=[0], logger=bart_logger,
-                               auto_lr_find=True, callbacks=[bart_checkpoint_callback], accumulate_grad_batches=4)
+        bart_trainer = Trainer(max_epochs=epoch + 1, precision=16, accelerator='gpu', devices=[0], logger=bart_logger, callbacks=[bart_checkpoint_callback], accumulate_grad_batches=4)
         if epoch == 0:
             bart_trainer.fit(bart_model)
         else:
             bart_trainer.fit(bart_model, ckpt_path=os.path.join(bart_checkpoint_path, f'epoch={epoch - 1}.ckpt'))
 
-        data_driver.apply_changes(config.tmp_dir)
+        # data_driver.apply_changes(config.tmp_dir)
         evaluate(config, mode='validation')
-        data_driver.save_relevance()
+        # data_driver.save_relevance()

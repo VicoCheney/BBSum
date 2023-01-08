@@ -49,13 +49,13 @@ class DataDriver:
                 os.replace(filename, os.path.join(tmp_dir, 'backup_' + shortname))
 
     def build_random_buffer(self, num_samples):
-        n0, n1 = [int(s) for s in num_samples.split(',')][:2]
+        n0, n1 = [int(s) for s in num_samples.split(',')]
         ret = []
         max_blk_num = 8
         logging.info("⚡⚡⚡⚡⚡⚡⚡⚡⚡Building Random Buffers for Bert-training⚡⚡⚡⚡⚡⚡⚡⚡⚡")
         for data_buf in tqdm(self.dataset):
-            st = random.randint(0, max(0, len(data_buf) - max_blk_num * n0))
             for i in range(n0):
+                st = random.randint(0, max(0, len(data_buf) - max_blk_num))
                 buf = Buffer(data_buf.summary)
                 buf.blocks = data_buf.blocks[st + i * max_blk_num:st + (i + 1) * max_blk_num]
                 ret.append(buf)
@@ -76,39 +76,39 @@ class DataDriver:
             if len(data_buf) <= 16:
                 ret.append(data_buf)
             else:
-                nblk = []
-                buf1 = Buffer(data_buf.summary)
-                buf2 = Buffer(data_buf.summary)
                 estimations = torch.tensor([blk.estimation for blk in data_buf], dtype=torch.float)
                 indices = estimations.argsort(descending=True)
-                count = 0
+
+                # buf1 = Buffer(data_buf.summary)
+                # count = 0
+                # nblk = []
+                # for i in indices.tolist():
+                #     if count == 13:
+                #         if len(nblk) >= 3:
+                #             break
+                #         else:
+                #             if data_buf[i].relevance <= 0:
+                #                 nblk.append(data_buf[i])
+                #     else:
+                #         if data_buf[i].relevance > 0:
+                #             buf1.blocks.append(data_buf[i])
+                #             count += 1
+                #         else:
+                #             nblk.append(data_buf[i])
+                # if count < max_blk_num:
+                #     buf1.blocks += nblk[:(max_blk_num-count)]
+                # assert len(buf1.blocks) == max_blk_num
+                # ret.append(buf1.sort_())
+
+                buf2 = Buffer(data_buf.summary)
                 count2 = 0
-
-                for i in indices.tolist():
-                    if count == 13:
-                        if len(nblk) >= 3:
-                            break
-                        else:
-                            if data_buf[i].relevance <= 0:
-                                nblk.append(data_buf[i])
-                    else:
-                        if data_buf[i].relevance > 0:
-                            buf1.blocks.append(data_buf[i])
-                            count += 1
-                        else:
-                            nblk.append(data_buf[i])
-                if count < max_blk_num:
-                    buf1.blocks += nblk[:(max_blk_num-count)]
-
                 for j in indices.tolist():
                     if count2 == 16:
                         break
                     else:
                         buf2.blocks.append(data_buf[j])
                         count2 += 1
-                assert len(buf1.blocks) == max_blk_num
                 assert len(buf2.blocks) == max_blk_num
-                # ret.append(buf1.sort_())
                 ret.append(buf2.sort_())
         return ret
 
@@ -131,50 +131,48 @@ class DataDriver:
                 sents_pairs.append([summary, str(blk)])
             if len(sents_pairs) != 0:
                 scores = model.predict(sents_pairs, batch_size=128)
-                indices = torch.tensor(scores).argsort(descending=True)
-                if len(indices) < 32:
-                    good = indices[:(len(indices)//2)]
-                    bad = indices[-(len(indices)//2+1):]
-                else:
-                    good = indices[:16]
-                    bad = indices[-16:]
-                for i, blk in enumerate(data_buf):
-                    if i in good:
-                        self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance+1))
-                    if i in bad:
-                        self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance-1))
+                max_score = max(scores)
+                if max_score > 0:
+                    for i, blk in enumerate(data_buf):
+                        if 1 - scores[i] / max_score < 0.15:
+                            self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance + 1))
         self._file.close()
         print("⚡⚡⚡⚡⚡⚡⚡⚡⚡Finish Initialization⚡⚡⚡⚡⚡⚡⚡⚡⚡")
 
     def bi_encoder_initialize(self):
         print("⚡⚡⚡⚡⚡⚡⚡⚡⚡Start Initialization⚡⚡⚡⚡⚡⚡⚡⚡⚡")
         model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        self._file = open(os.path.join(self.config.tmp_dir, 'govreport_bi_encoder_initialization.txt'), 'w')
+        self._file = open(os.path.join(self.config.tmp_dir, 'bi_encoder_initialization.txt'), 'w')
         tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
         for data_buf in tqdm(self.dataset):
             summary = tokenizer.decode(data_buf.summary['input_ids'][0], skip_special_tokens=True)
             summary_np = np.array(model.encode(summary))
             blks_np = np.array(model.encode([str(blk) for blk in data_buf.blocks]))
             scores = [summary_np.dot(blk_np) for blk_np in blks_np]
-            indices = torch.tensor(scores).argsort(descending=True)
-            if len(indices) < 32:
-                good = indices[:(len(indices) // 2)]
-                bad = indices[-(len(indices) // 2 + 1):]
-            else:
-                good = indices[:16]
-                bad = indices[-16:]
-            for i, blk in enumerate(data_buf):
-                if i in good:
-                    self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance + 1))
-                if i in bad:
-                    self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance - 1))
+            max_score = max(scores)
+            if max_score > 0:
+                for i, blk in enumerate(data_buf):
+                    if 1 - scores[i] / max_score < 0.15:
+                        self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance + 1))
+            # indices = torch.tensor(scores).argsort(descending=True)
+            # if len(indices) < 32:
+            #     good = indices[:(len(indices) // 2)]
+            #     bad = indices[-(len(indices) // 2 + 1):]
+            # else:
+            #     good = indices[:16]
+            #     bad = indices[-16:]
+            # for i, blk in enumerate(data_buf):
+            #     if i in good:
+            #         self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance + 1))
+            #     if i in bad:
+            #         self._file.write('{} {} {}\n'.format(blk.pos, 'relevance', blk.relevance - 1))
         self._file.close()
         print("⚡⚡⚡⚡⚡⚡⚡⚡⚡Finish Initialization⚡⚡⚡⚡⚡⚡⚡⚡⚡")
 
     def apply_initialization(self, tmp_dir):
         for shortname in os.listdir(tmp_dir):
             filename = os.path.join(tmp_dir, shortname)
-            if shortname.startswith('govreport_bi_encoder_initialization'):
+            if shortname.startswith('bi_encoder_initialization'):
                 with open(filename, 'r') as fin:
                     for line in fin:
                         tmp = [

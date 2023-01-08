@@ -2,7 +2,6 @@ import os
 import re
 
 import torch
-from torch.optim.lr_scheduler import _LRScheduler
 from buffer import Buffer
 
 
@@ -14,25 +13,6 @@ def find_lastest_checkpoint(checkpoints_dir, epoch=False):
             if m is not None and int(m.group(1)) > lastest[0]:
                 lastest = (int(m.group(1)), shortname)
     return os.path.join(checkpoints_dir, lastest[-1]) if not epoch else lastest[0]
-
-
-class WarmupLinearLR(_LRScheduler):
-    def __init__(self, optimizer, step_size, peak_percentage=0.1, min_lr=1e-5, last_epoch=-1):
-        self.step_size = step_size
-        self.peak_step = peak_percentage * step_size
-        self.min_lr = min_lr
-        super(WarmupLinearLR, self).__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        ret = []
-        for base_lr in self.base_lrs:
-            if self._step_count <= self.peak_step:
-                ret.append(self.min_lr + (base_lr - self.min_lr) * self._step_count / self.peak_step)
-            else:
-                ret.append(self.min_lr + max(0, (base_lr - self.min_lr) * (self.step_size - self._step_count) / (
-                        self.step_size - self.peak_step)))
-        return ret
-
 
 def compress(compresser, data_buf, times, device, batch_size_inference):
     times = [int(x) for x in times.split(',')]

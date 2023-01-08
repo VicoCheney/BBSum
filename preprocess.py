@@ -25,9 +25,9 @@ def build_buffer(dataset, dataset_name):
     tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
     data_buffers, cnt = [], 0
     for i in tqdm(range(len(dataset.data))):
-        summary = tokenizer(clean(dataset[i]['summary']), padding="max_length", max_length=1024, return_tensors="pt", truncation=True)
+        summary = tokenizer(clean(dataset[i]['abstract']), padding="max_length", max_length=1024, return_tensors="pt", truncation=True)
         ret = Buffer(summary)
-        d = tokenizer.tokenize(clean(dataset[i]['report']))
+        d = tokenizer.tokenize(clean(dataset[i]['article']))
         end_tokens = {'\n': 0, '.': 1, '?': 1, '!': 1, ',': 2}
         for k, v in list(end_tokens.items()):
             end_tokens['Ġ' + k] = v
@@ -63,14 +63,14 @@ def build_buffer(dataset, dataset_name):
             tmp = d[st: en] + [tokenizer.sep_token]
             ret.insert(Block(tokenizer.convert_tokens_to_ids(tmp), cnt))
         data_buffers.append(ret)
-    with open(os.path.join('data', f'govreport_{dataset_name}.pkl'), 'wb') as fout:
+    with open(os.path.join('data', f'arxiv_{dataset_name}.pkl'), 'wb') as fout:
         pickle.dump(data_buffers, fout)
 
 
 if __name__ == '__main__':
-    dataset = datasets.load_dataset("ccdv/govreport-summarization")
+    # dataset = datasets.load_dataset("ccdv/govreport-summarization")
     # dataset = datasets.load_dataset("ccdv/pubmed-summarization")
-    # dataset = datasets.load_dataset("ccdv/arxiv-summarization")
+    dataset = datasets.load_dataset("ccdv/arxiv-summarization")
     data_train = dataset['train']
     data_validation = dataset['validation']
     data_test = dataset['test']

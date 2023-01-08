@@ -24,14 +24,7 @@ class BertModule(pl.LightningModule):
         self._file.close()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.compresser.parameters(),
-            lr=self.config.lr1,
-            weight_decay=self.config.weight_decay1
-        )
-        scheduler = WarmupLinearLR(optimizer, self.config.step_size)
-
-        return [optimizer], [scheduler]
+        return torch.optim.AdamW(self.summarizer.parameters(), lr=self.config.lr1)
 
     def train_dataloader(self):
         loader = DataLoader(
